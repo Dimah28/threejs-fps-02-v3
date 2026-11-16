@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duskfall Bazaar — tactical FPS</title>
+<style>
+  :root {
+    --panel: rgba(16, 12, 22, 0.78); --panel2: rgba(16, 12, 22, 0.92);
+    --line: rgba(255, 210, 122, 0.25); --ink: #f2e9d8; --muted: #b8a894;
+    --gold: #ffd27a; --ember: #ff8a3c; --ward: #5fd7d7; --red: #ff5a3c;
+    --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-num: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1033; color: var(--ink); font-family: var(--font-ui); }
+  #game, #game canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; font-size: 14px; }
+  .hidden { display: none !important; }
+
+  /* Minimap + location */
+  #minimap-wrap { position: fixed; left: 16px; top: 14px; }
+  #minimap { width: 180px; height: 150px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); display: block; }
+  #loc-label { margin-top: 4px; font-size: 11px; letter-spacing: .12em; color: var(--gold); text-shadow: 0 1px 2px #000; font-weight: 600; }
+
+  /* Top bar */
+  #topbar { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); display: flex; gap: 8px; align-items: stretch; }
+  .tb { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 14px; text-align: center; min-width: 132px; }
+  .tb .tname { font-size: 11px; letter-spacing: .14em; font-weight: 700; }
+  .tb .tscore { font-family: var(--font-num); font-size: 24px; line-height: 1; }
+  .tb .pips { margin-top: 3px; display: flex; gap: 3px; justify-content: center; }
+  .tb .pips i { width: 9px; height: 9px; border-radius: 2px; background: #4a4038; display: block; }
+  .tb .pips i.on { background: var(--gold); }
+  #tb-a .tname { color: var(--ember); } #tb-b .tname { color: var(--ward); }
+  #tb-mid { min-width: 118px; }
+  #timer { font-family: var(--font-num); font-size: 26px; line-height: 1; }
+  #timer.urgent { color: var(--red); }
+  #round-label, #phase-label { font-size: 10px; letter-spacing: .14em; color: var(--muted); }
+  #phase-label { color: var(--gold); }
+
+  /* Killfeed */
+  #killfeed { position: fixed; right: 16px; top: 14px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .kf-row { background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 3px 8px; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+  .kf-you { color: var(--gold); font-weight: 700; }
+  .kf-wep { color: var(--muted); font-size: 11px; }
+  .kf-tag { background: var(--gold); color: #1c1033; font-weight: 800; font-size: 10px; padding: 1px 4px; border-radius: 2px; }
+
+  /* Radio feed */
+  #radio { position: fixed; left: 16px; top: 190px; display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
+  .radio-row { background: var(--panel); border-left: 3px solid var(--gold); border-radius: 3px; padding: 4px 8px; font-size: 12.5px; }
+  .radio-who { color: var(--gold); font-weight: 700; }
+
+  /* Banner */
+  #banner { position: fixed; left: 50%; top: 21%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 200ms; }
+  #banner.show { opacity: 1; }
+  #banner-title { font-size: 34px; font-weight: 800; letter-spacing: .06em; text-shadow: 0 2px 12px #000; }
+  #banner-sub { font-size: 15px; color: var(--muted); text-shadow: 0 1px 4px #000; }
+  #banner.red #banner-title { color: var(--red); }
+  #banner.gold #banner-title { color: var(--gold); }
+
+  /* Plant progress */
+  #plantbar { position: fixed; left: 50%; bottom: 27%; transform: translateX(-50%); width: 340px; text-align: center; }
+  #plantlabel { font-size: 12px; letter-spacing: .12em; margin-bottom: 5px; text-shadow: 0 1px 3px #000; font-weight: 600; }
+  #planttrack { height: 8px; background: rgba(0,0,0,.6); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  #plantfill { height: 100%; width: 0%; background: var(--gold); }
+
+  #toast { position: fixed; left: 50%; top: 64%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 6px 14px; border-radius: 4px; opacity: 0; transition: opacity 200ms; font-size: 13px; }
+  #toast.show { opacity: 1; }
+
+  /* Bottom-left stats */
+  #stats { position: fixed; left: 16px; bottom: 16px; }
+  #stat-boxes { display: flex; gap: 8px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; min-width: 86px; }
+  .stat .lbl { font-size: 10px; letter-spacing: .14em; color: var(--muted); }
+  .stat .val { font-family: var(--font-num); font-size: 26px; line-height: 1.05; }
+  .stat .bar { height: 4px; background: #3a3230; border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .stat .bar i { display: block; height: 100%; background: var(--gold); }
+  #health-bar { background: #7ac74f; } #armour-bar { background: #5fa8d7; }
+  #cash-box .val { color: var(--gold); }
+  #objective { margin-top: 6px; font-size: 12px; color: var(--muted); text-shadow: 0 1px 2px #000; }
+
+  /* Bottom-right weapon */
+  #weapon-panel { position: fixed; right: 16px; bottom: 16px; text-align: right; }
+  #weapon-name { font-size: 15px; font-weight: 700; letter-spacing: .08em; }
+  #weapon-sub { font-size: 11px; color: var(--muted); letter-spacing: .1em; }
+  #ammo { font-family: var(--font-num); font-size: 44px; line-height: 1; margin-top: 2px; }
+  #ammo.empty #ammo-mag { color: var(--red); }
+  #ammo-reserve { font-size: 16px; color: var(--muted); }
+  #slots { margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+  #slots b { color: var(--ink); background: rgba(255,210,122,.16); border: 1px solid var(--line); padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+  #util-line { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+  #util-line b { color: var(--gold); }
+
+  /* Crosshair + hitmarker + damage numbers */
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 0; height: 0; --sp: 7px; }
+  #crosshair i { position: absolute; background: var(--ink); box-shadow: 0 0 2px #000; }
+  #crosshair i:nth-child(1) { left: -1px; top: calc(-1 * var(--sp) - 7px); width: 2px; height: 7px; }
+  #crosshair i:nth-child(2) { left: -1px; top: var(--sp); width: 2px; height: 7px; }
+  #crosshair i:nth-child(3) { top: -1px; left: calc(-1 * var(--sp) - 7px); height: 2px; width: 7px; }
+  #crosshair i:nth-child(4) { top: -1px; left: var(--sp); height: 2px; width: 7px; }
+  #crosshair .dot { left: -1.5px; top: -1.5px; width: 3px; height: 3px; border-radius: 50%; }
+  #hitmarker { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; }
+  #hitmarker.on { opacity: 1; }
+  #hitmarker.kill i { background: var(--red); }
+  #hitmarker i { position: absolute; background: var(--gold); }
+  #hitmarker i:nth-child(1) { left: 12px; top: 0; width: 2px; height: 8px; }
+  #hitmarker i:nth-child(2) { left: 12px; bottom: 0; width: 2px; height: 8px; }
+  #hitmarker i:nth-child(3) { top: 12px; left: 0; height: 2px; width: 8px; }
+  #hitmarker i:nth-child(4) { top: 12px; right: 0; height: 2px; width: 8px; }
+  #dmg-layer, #nametags { position: fixed; inset: 0; overflow: hidden; }
+  .dmg { position: absolute; transform: translate(-50%,-50%); font-family: var(--font-num); font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 1px 3px #000; transition: transform .9s ease-out, opacity .9s; pointer-events: none; }
+  .dmg.head { color: var(--gold); font-size: 17px; }
+  .nametag { position: absolute; transform: translate(-50%,-100%); font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #bfe8e8; background: rgba(10,14,18,.55); padding: 1px 6px; border-radius: 3px; pointer-events: none; }
+  .nametag.enemy { color: #ffb0a0; }
+  #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 90px 30px rgba(255,30,10,.55); opacity: 0; transition: opacity 120ms; }
+  #hurt.on { opacity: 1; }
+  #flash-white { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 450ms; }
+  #flash-white.on { opacity: .85; transition: opacity 60ms; }
+
+  /* Buy menu */
+  #buymenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,6,16,.55); pointer-events: auto; }
+  #buy-panel { width: min(880px, 94vw); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 20px 24px; }
+  #buy-head { display: flex; justify-content: space-between; align-items: baseline; }
+  #buy-head h2 { margin: 0; font-size: 22px; letter-spacing: .18em; }
+  #buy-timer { color: var(--muted); font-size: 12px; letter-spacing: .1em; }
+  #buy-cash { font-family: var(--font-num); font-size: 26px; color: var(--gold); }
+  #buy-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+  .buy-col-title { font-size: 10.5px; letter-spacing: .14em; color: var(--muted); margin-bottom: 6px; font-weight: 700; }
+  .buy-item { display: block; width: 100%; text-align: left; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 4px; color: var(--ink); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; font-family: inherit; }
+  .buy-item:hover { border-color: var(--gold); }
+  .buy-item-name { font-weight: 700; font-size: 13px; }
+  .buy-item-price { color: var(--gold); font-family: var(--font-num); font-size: 12px; }
+  .buy-item-desc { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .buy-item.owned { border-color: #4a7a4a; opacity: .75; }
+  .buy-item.owned .buy-item-price { color: #7ac74f; }
+  .buy-item.poor { opacity: .55; }
+  .buy-item.poor .buy-item-price { color: var(--red); }
+  #buy-foot { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+  /* Start / pause / end overlay */
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(14,8,22,.72); pointer-events: auto; }
+  .overlay[hidden], .overlay.hidden { display: none; }
+  .panel { width: min(520px, 92vw); padding: 30px 34px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+  .panel h1 { margin: 0 0 6px; font-size: 34px; letter-spacing: .04em; }
+  .panel h1 span { color: var(--gold); }
+  .panel p { margin: 0 0 20px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  #play-btn { font: inherit; font-weight: 700; padding: 12px 20px; border: 1px solid var(--gold); border-radius: 6px; background: var(--gold); color: #1c1033; cursor: pointer; }
+  #play-btn:hover { background: var(--ink); }
+  .keys { margin: 22px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; font-size: 13px; color: var(--muted); }
+  .keys kbd { min-width: 24px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 3px; font-family: var(--font-num); font-size: 11.5px; color: var(--ink); text-align: center; display: inline-block; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<pre id="testlog" style="position:fixed;left:-9999px;top:0;"></pre>
+<div id="hurt"></div>
+<div id="flash-white"></div>
+<div id="hud" aria-hidden="true">
+  <div id="minimap-wrap"><canvas id="minimap" width="180" height="150"></canvas><div id="loc-label">EMBER SPAWN</div></div>
+  <div id="topbar">
+    <div class="tb" id="tb-a"><div class="tname" id="team-a-name">EMBERFOX</div><div class="tscore" id="score-a">0</div><div class="pips" id="pips-a"></div></div>
+    <div class="tb" id="tb-mid"><div id="timer">1:40</div><div id="round-label">ROUND 1 OF 12</div><div id="phase-label">BUY</div></div>
+    <div class="tb" id="tb-b"><div class="tname" id="team-b-name">LANTERN WARD</div><div class="tscore" id="score-b">0</div><div class="pips" id="pips-b"></div></div>
+  </div>
+  <div id="killfeed"></div>
+  <div id="radio"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="plantbar" class="hidden"><div id="plantlabel"></div><div id="planttrack"><div id="plantfill"></div></div></div>
+  <div id="toast"></div>
+  <div id="stats">
+    <div id="stat-boxes">
+      <div class="stat"><div class="lbl">HEALTH</div><div class="val" id="health">100</div><div class="bar"><i id="health-bar" style="width:100%"></i></div></div>
+      <div class="stat"><div class="lbl">ARMOUR</div><div class="val" id="armour">0</div><div class="bar"><i id="armour-bar" style="width:0%"></i></div></div>
+      <div class="stat" id="cash-box"><div class="lbl">CASH</div><div class="val" id="cash">$800</div></div>
+    </div>
+    <div id="objective">Plant the charge at Spice Court or Lantern Row.</div>
+  </div>
+  <div id="weapon-panel">
+    <div id="weapon-name">Wasp P9</div><div id="weapon-sub">SEMI · 30 DMG</div>
+    <div id="ammo"><span id="ammo-mag">13</span><span id="ammo-reserve">/ 52</span></div>
+    <div id="slots"></div><div id="util-line"></div>
+  </div>
+  <div id="crosshair"><i></i><i></i><i></i><i></i><i class="dot"></i></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="dmg-layer"></div><div id="nametags"></div>
+</div>
+
+<div id="buymenu" class="hidden">
+  <div id="buy-panel">
+    <div id="buy-head"><h2>REQUISITION <span id="buy-timer">12 S LEFT</span></h2><div id="buy-cash">$800</div></div>
+    <div id="buy-grid"></div>
+    <div id="buy-foot">Buy time: <b>B</b> opens this menu · Click an item to buy · <b>Esc</b> closes</div>
+  </div>
+</div>
+
+<div id="menu" class="overlay">
+  <section class="panel" role="dialog" aria-modal="true">
+    <h1 id="menu-title">DUSKFALL <span>BAZAAR</span></h1>
+    <p id="menu-copy">A night bazaar at dusk, lit by lanterns. Five versus five, first to 7 rounds. Plant the charge at Spice Court or Lantern Row — or hold the stalls and defuse it.</p>
+    <button id="play-btn" type="button">Click to play</button>
+    <ul class="keys" id="menu-keys">
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
+      <li><kbd>Mouse</kbd> Look · <kbd>Click</kbd> Fire</li>
+      <li><kbd>R</kbd> Reload</li>
+      <li><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Weapons</li>
+      <li><kbd>Q</kbd> Flash · <kbd>G</kbd> Smoke · <kbd>5</kbd> Frag</li>
+      <li><kbd>E</kbd> Plant / Defuse (hold)</li>
+      <li><kbd>B</kbd> Buy menu</li>
+      <li><kbd>Ctrl</kbd> Crouch · <kbd>Space</kbd> Jump</li>
+    </ul>
+  </section>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
