@@ -111,14 +111,15 @@ export function createWorld(scene) {
   // Lane blocks.
   box(-20, -17.6, 12, 4.8, 4, mats.brick); box(-1, -17.8, 10, 4.4, 4, mats.plaster); box(20, -17, 12, 6, 4.5, mats.brick);
   box(-20, 17.6, 12, 4.8, 4, mats.plaster); box(1, 17.8, 10, 4.4, 4, mats.brick); box(20, 17, 12, 6, 4.5, mats.plaster2);
-  box(-5, -5.5, 6, 5, 3.5, mats.plaster2); box(5, 5.5, 6, 5, 3.5, mats.brick);
-  // Fountain plaza (mid).
-  const fBase = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.5, 1.0, 12), mats.stone);
+  // Mid blocks, shifted so bots can pass the fountain north/south.
+  box(-4, -6.75, 5, 4.5, 3.5, mats.plaster2); box(4, 6.75, 5, 4.5, 3.5, mats.brick);
+  // Fountain plaza (mid) — slim so bots can pass north/south of it.
+  const fBase = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 1.0, 12), mats.stone);
   fBase.position.set(0, 0.5, 0); fBase.castShadow = true; scene.add(fBase); shootables.push(fBase);
-  colliders.push({ x0: -2.3, z0: -2.3, x1: 2.3, z1: 2.3, h: 1.0, pen: false });
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.2, 12), mats.water);
+  colliders.push({ x0: -1.6, z0: -1.6, x1: 1.6, z1: 1.6, h: 1.0, pen: false });
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.2, 12), mats.water);
   water.position.set(0, 1.0, 0); scene.add(water);
-  const fTop = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 1.6, 8), mats.stone);
+  const fTop = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 1.6, 8), mats.stone);
   fTop.position.set(0, 1.6, 0); scene.add(fTop);
   // Market stalls (thin wood = wallbangable).
   function stall(x, z, w, awn) {
@@ -130,7 +131,7 @@ export function createWorld(scene) {
       post.position.set(x + dx, 1.2, z + 0.45); scene.add(post);
     }
   }
-  stall(-8, -11.5, 8, '#d86a20'); stall(8, 11.5, 8, '#2e6b6b'); stall(-19, -7.5, 6, '#9a2e3e'); stall(19, 7.5, 6, '#d86a20'); stall(2, -13.5, 8, '#2e4a7a');
+  stall(-8, -10.5, 8, '#d86a20'); stall(8, 11.5, 8, '#2e6b6b'); stall(-19, -7.5, 6, '#9a2e3e'); stall(19, 7.5, 6, '#d86a20'); stall(2, -11.5, 8, '#2e4a7a');
   // Balconies (verticality) + ramps.
   function balcony(x, z, w, d) {
     const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, d), mats.wood);
@@ -143,13 +144,14 @@ export function createWorld(scene) {
   }
   balcony(-11, -17.5, 4, 3); balcony(11, 17.5, 4, 3);
   // Ramps up to the balconies.
-  function ramp(x, z, w, d, dir) {
+  function ramp(x, z, w, d, rotX) {
     const r = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, d), mats.wood);
-    r.position.set(x, 1.3, z); r.rotation.z = dir * 0.62; r.castShadow = true; scene.add(r);
+    r.position.set(x, 1.3, z); r.rotation.x = rotX; r.castShadow = true; scene.add(r);
   }
-  ramp(-15.2, -17.5, 4.6, 2.6, 1); ramp(15.2, 17.5, 4.6, 2.6, -1);
+  ramp(-11, -14.5, 3, 3.6, 0.62); // up toward balcony A (north)
+  ramp(11, 14.5, 3, 3.6, -0.62); // up toward balcony B (south)
   // Crates, barrels, sacks, pottery.
-  const crateSpots = [[-14, -3, 1.4], [-13, -4.2, 1.1], [-14.2, -4.4, 1], [14, 3, 1.4], [13, 4.2, 1.1], [14.2, 4.4, 1], [-8, 8, 1.3], [8, -8, 1.3], [-22, 4, 1.2], [22, -4, 1.2], [3, -9, 1.2], [-3, 9, 1.2]];
+  const crateSpots = [[-12, -5, 1.4], [-11, -6.2, 1.1], [-12.2, -6.4, 1], [12, 5, 1.4], [11, 6.2, 1.1], [12.2, 6.4, 1], [-8, 8, 1.3], [8, -8, 1.3], [-22, 4, 1.2], [22, -4, 1.2], [3, -9, 1.2], [-3, 9, 1.2]];
   for (const [x, z, s] of crateSpots) box(x, z, s, s, s, mats.wood, { y: 0 });
   const barrelSpots = [[-16, -14.5], [16, 14.5], [-6, 12], [6, -12], [24, 8], [-24, -8]];
   for (const [x, z] of barrelSpots) {
@@ -214,8 +216,8 @@ export function createWorld(scene) {
       // Balconies only count when already up there; ramps lift you gradually.
       if (x >= -13 && x <= -9 && z >= -19 && z <= -16) return y > 1.2 ? 2.75 : 0;
       if (x >= 9 && x <= 13 && z >= 16 && z <= 19) return y > 1.2 ? 2.75 : 0;
-      if (x >= -17.5 && x <= -13 && z >= -18.8 && z <= -16.2) return Math.max(0, (x + 17.5) / 4.5) * 2.75;
-      if (x >= 13 && x <= 17.5 && z >= 16.2 && z <= 18.8) return Math.max(0, (17.5 - x) / 4.5) * 2.75;
+      if (x >= -12.5 && x <= -9.5 && z >= -16 && z <= -13) return Math.max(0, (-13 - z) / 3) * 2.75;
+      if (x >= 9.5 && x <= 12.5 && z >= 13 && z <= 16) return Math.max(0, (z - 13) / 3) * 2.75;
       return 0;
     },
     locationAt(x, z) {
@@ -241,17 +243,19 @@ function buildWaypoints() {
     [-24, -13], [-16, -13], [-8, -13], [0, -13], [8, -13], [16, -13], [24, -13], // 0-6 A Long
     [-24, 0], [-14, 0], [-8, -3], [8, 3], [14, 0], [24, 0], // 7-12 Mid
     [-24, 13], [-16, 13], [-8, 13], [0, 13], [8, 13], [16, 13], [24, 13], // 13-19 B Lane
-    [-19, -11], [-19, -6], [19, 11], [19, 6], [-11, -17.5], [11, 17.5], // 20-25 sites+balconies
+    [-19, -11], [-14.5, -9], [19, 11], [14.5, 9], // 20-23 sites + approaches (beside the stalls)
+    [-3.5, -3], [3.5, -3], [-3.5, 3], [3.5, 3], // 24-27 mid passes around the fountain
   ];
   const edges = {};
   function link(a, b) { (edges[a] ??= []).push(b); (edges[b] ??= []).push(a); }
   for (let i = 0; i < 6; i++) link(i, i + 1);
-  for (let i = 7; i < 12; i++) link(i, i + 1);
+  link(7, 8); link(8, 9); link(10, 11); link(11, 12); // mid chain, NO 9-10 (fountain)
   for (let i = 13; i < 19; i++) link(i, i + 1);
-  link(0, 7); link(1, 8); link(3, 9); link(5, 11); link(6, 12);
-  link(7, 13); link(8, 14); link(10, 16); link(11, 18); link(12, 19);
-  link(1, 20); link(20, 21); link(21, 8); link(5, 22); link(22, 23); link(23, 11);
-  link(0, 24); link(24, 1); link(6, 25); link(25, 19);
-  link(9, 10); link(2, 9); link(4, 10);
+  link(0, 7); link(1, 8); link(5, 11); link(6, 12);
+  link(7, 13); link(8, 14); link(11, 18); link(12, 19);
+  link(1, 20); link(20, 21); link(21, 8); link(22, 23); link(23, 11);
+  link(9, 24); link(24, 25); link(25, 10);
+  link(9, 26); link(26, 27); link(27, 10);
+  link(2, 9); link(4, 10);
   return { pts: pts.map(([x, z]) => ({ x, z })), edges };
 }

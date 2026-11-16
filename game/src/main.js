@@ -273,7 +273,11 @@ function scheduleCarrierRecovery() {
   setTimeout(() => {
     if (game.bomb.state !== 'dropped') return;
     const atk = bots.bots.filter((b) => b.alive && b.side === 'attack');
-    if (atk.length) { atk[0].isCarrier = true; game.bomb.state = 'carried'; game.bomb.carrier = atk[0]; }
+    if (atk.length) {
+      atk[0].isCarrier = true; game.bomb.state = 'carried'; game.bomb.carrier = atk[0];
+      bots.retarget(atk[0], game.attackSite === 'A' ? 20 : 22); // new carrier must go to the attack site
+      tlog(`carrier recovered by ${atk[0].name}`);
+    }
   }, 2000);
 }
 function handleKill(killer, victim, weapon, head, wallbang) {
@@ -283,6 +287,7 @@ function handleKill(killer, victim, weapon, head, wallbang) {
   if (head) tags.push('HS');
   if (wallbang) tags.push('WALLBANG');
   hud.killfeedAdd(kName, weapon ? weapon.name : '', vName, tags);
+  tlog(`${kName} killed ${vName}${head ? ' HS' : ''}${wallbang ? ' WALLBANG' : ''}`);
   if (victim.isPlayer) {
     player.state.alive = false; game.deaths += 1;
     tlog(`player died to ${kName}`);
@@ -346,6 +351,7 @@ function endRound(winner, reason, byBot) {
   hud.setCash(game.money);
   const reasonText = reason === 'detonation' ? 'The charge detonated' : reason === 'defuse' ? 'The charge was defused' : reason === 'time' ? 'Time expired — the sites held' : 'The other team was eliminated';
   hud.banner(playerWon ? `${teamName(winner)} WINS THE ROUND` : `${teamName(winner)} TAKES THE ROUND`, `${reasonText} · +$${playerWon ? winMoney : lossMoney}`, 4000, playerWon ? 'gold' : 'red');
+  hud.setObjective(`${reasonText} — ${teamName(winner)} takes round ${game.round}.`);
   if (playerWon) audio.win(); else audio.lose();
   hud.setScore(game.score.emberfox, game.score.ward, 0, 0, 'EMBERFOX', 'LANTERN WARD');
   tlog(`round ${game.round} won by ${winner} (${reason}); score ${game.score.emberfox}-${game.score.ward}`);
@@ -544,11 +550,13 @@ function syncCamera() {
     const e = nearestEnemy(ally);
     if (e) camera.lookAt(e.pos.x, e.pos.y + 1.3, e.pos.z);
     else camera.rotation.set(0, ally.yaw, 0, 'YXZ');
+    camera.updateMatrixWorld(true);
     return;
   }
   recoil = Math.max(0, recoil - 0.03);
   camera.position.set(p.pos.x, p.pos.y + p.eye + Math.sin(performance.now() * 0.001) * 0, p.pos.z);
   camera.rotation.set(p.pitch + recoil * 0.4, p.yaw, 0, 'YXZ');
+  camera.updateMatrixWorld(true); // projections (damage numbers, nametags) need a fresh matrix
 }
 function nearestEnemy(from) {
   let best = null, bd = 1e9;
@@ -795,7 +803,7 @@ function runShot(name) {
     if (enemies[1]) { enemies[1].pos.set(12, 0, -8); enemies[1].yaw = Math.PI / 2; enemies[1].mesh.position.copy(enemies[1].pos); enemies[1].mesh.rotation.y = enemies[1].yaw; }
     if (enemies[2]) { enemies[2].pos.set(2, 0, 10); enemies[2].yaw = Math.PI; enemies[2].mesh.position.copy(enemies[2].pos); }
     effects.smoke(new THREE.Vector3(0, 0, -6));
-    hud.killfeedAdd('You', 'Vesper AR', 'Faris', ['HS']);
+    hud.killfeedAdd('You', 'Vesper AR', 'Eda', ['HS']);
     hud.killfeedAdd('Asha', 'Moth SMG', 'Gita', []);
     hud.killfeedAdd('Dario', 'Heron DMR', 'Hadi', ['WALLBANG']);
     hud.radioAdd('Asha', 'Entry', 'Contact at Lantern Row, rotating');
@@ -814,7 +822,7 @@ function runShot(name) {
     effects.tracer(farEnemy, crossTo);
     effects.muzzle(farEnemy, crossTo.clone().sub(farEnemy).normalize());
     syncCamera();
-    hud.damageNumber(new THREE.Vector3(6, 2.5, 2), 'HEAD x2 72', 'head', true);
+    hud.damageNumber(new THREE.Vector3(6, 3.0, 2), 'HEAD x2 72', 'head', true);
   } else if (name === 'plant') {
     giveVesper();
     game.phase = 'live'; game.phaseT = 47; game.round = 7;
@@ -843,6 +851,7 @@ function runShot(name) {
     p.pos.set(14, 0, 6); p.yaw = -Math.PI / 2.2; p.pitch = 0;
     effects.explosion(new THREE.Vector3(19, 1, 11));
     hud.banner('EMBERFOX WINS THE ROUND', 'The charge detonated at Lantern Row · +$3,250', 0, 'gold');
+    hud.setObjective('The charge detonated at Lantern Row — Emberfox takes round 8.');
     hud.killfeedAdd('You', 'Vesper AR', 'Iman', ['HS']);
     hud.killfeedAdd('Cleo', 'Moth SMG', 'Eda', []);
     hud.radioAdd('Bram', 'Support', 'Site clear — nice plant');
@@ -854,6 +863,7 @@ function runShot(name) {
   }
   refreshWeaponHud();
   syncCamera();
+  minimapAt = elapsed - 1; // force one minimap paint (its 0.12 s throttle never fires in short settle runs)
   paintTwiceThenReady();
 }
 syncCamera();

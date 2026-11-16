@@ -227,14 +227,22 @@ export function createBots(scene, world, ctx) {
         }
         if (bot.state === 'defuse') {
           if (now >= bot.defuseAt) { ctx.onDefused(bot); return; }
-          if (seen && target) { bot.state = 'move'; bot.defuseAt = 0; }
+          // Only break off the defuse for a close threat, not a distant sightline.
+          let nearestFoe = 1e9;
+          for (const e of bots) if (e.alive && e.team !== bot.team) nearestFoe = Math.min(nearestFoe, bot.pos.distanceTo(e.pos));
+          if (ctx.playerAlive() && ctx.playerTeam() !== bot.team) nearestFoe = Math.min(nearestFoe, bot.pos.distanceTo(ctx.playerState.pos));
+          if (nearestFoe < 8) { bot.state = 'move'; bot.defuseAt = 0; }
         }
       }
     } else if (G.phase === 'live' && isAttacker && bot.isCarrier) {
       const site = G.attackSite;
       const sp = site === 'A' ? SITES.A : SITES.B;
       const d = Math.hypot(bot.pos.x - sp.x, bot.pos.z - sp.z);
-      if (d < sp.r - 0.5 && !seen) {
+      // Plant when on site and no enemy is close — a distant sightline must not block it forever.
+      let nearestFoe = 1e9;
+      for (const e of bots) if (e.alive && e.team !== bot.team) nearestFoe = Math.min(nearestFoe, bot.pos.distanceTo(e.pos));
+      if (ctx.playerAlive() && ctx.playerTeam() !== bot.team) nearestFoe = Math.min(nearestFoe, bot.pos.distanceTo(ctx.playerState.pos));
+      if (d < sp.r - 0.5 && nearestFoe > 12) {
         if (bot.state !== 'plant') { bot.state = 'plant'; bot.plantAt = now + 3.5; radio(bot, 'plant', { site }); ctx.onPlantStart(bot, site); }
         if (now >= bot.plantAt) { ctx.onPlanted(bot, site); return; }
       } else if (bot.state === 'plant') { bot.state = 'move'; bot.plantAt = 0; ctx.onPlantCancel(bot); }
@@ -303,11 +311,11 @@ export function createBots(scene, world, ctx) {
       const sp = SPAWNS[atkTeam][i];
       const b = spawnBot(def, atkTeam, 'attack', sp, atkTeam === 'emberfox' ? -Math.PI / 2 : Math.PI / 2);
       b.isCarrier = !playerIsCarrier && def.role === 'entry';
-      setPath(b, attackSite === 'A' ? (def.role === 'lurker' ? 22 : 20) : (def.role === 'lurker' ? 20 : 22));
+      setPath(b, attackSite === 'A' ? 20 : 22);
       if (def.role === 'awper') setPath(b, attackSite === 'A' ? 9 : 10);
     });
     // Defenders: 5 bots hold.
-    const holdNodes = attackSite === 'A' ? [20, 21, 9, 24, 11] : [22, 23, 10, 25, 8];
+    const holdNodes = attackSite === 'A' ? [20, 21, 9, 2, 11] : [22, 23, 10, 4, 8];
     defDefs.forEach((def, i) => {
       const sp = SPAWNS[defTeam][i];
       const b = spawnBot(def, defTeam, 'defend', sp, defTeam === 'emberfox' ? -Math.PI / 2 : Math.PI / 2);
@@ -328,5 +336,5 @@ export function createBots(scene, world, ctx) {
   function botByMeshId(id) { return bots.find((b) => b.id === id); }
   function carrierBot() { return bots.find((b) => b.isCarrier && b.alive); }
 
-  return { bots, startRound, update, aliveCounts, hitMeshes, botByMeshId, carrierBot, pickLine, SITES };
+  return { bots, startRound, update, aliveCounts, hitMeshes, botByMeshId, carrierBot, pickLine, retarget: (bot, node) => setPath(bot, node), SITES };
 }
